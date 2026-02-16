@@ -68,17 +68,17 @@ export default function HomePage() {
         temDados: avaliacoesDoLocal.length > 0,
       };
 
-      
-      
+
+
     });
 
     listaProcessada.sort((a, b) => {
-        const dataA = a.ultimaData ? new Date(a.ultimaData).getTime() : 0;
-        const dataB = b.ultimaData ? new Date(b.ultimaData).getTime() : 0;
+      const dataA = a.ultimaData ? new Date(a.ultimaData).getTime() : 0;
+      const dataB = b.ultimaData ? new Date(b.ultimaData).getTime() : 0;
 
-        return dataB - dataA
+      return dataB - dataA
 
-      });
+    });
 
     setLocaisComDados(listaProcessada);
   };
@@ -97,11 +97,11 @@ export default function HomePage() {
   });
 
   return (
-    <main className="min-h-screen bg-linear-to-b from-gray-50 to-white p-3 sm:p-4 md:p-6">
+    <main className="min-h-screen bg-emerald-50 from-gray-50 to-white p-3 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl ext-3xl font-semibold text-green-800 tracking-tight leading-tight">
               Monitoramento Agrícola
             </h1>
             <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">
@@ -132,7 +132,7 @@ export default function HomePage() {
                 <select
                   value={fazendaSelecionada}
                   onChange={(e) => setFazendaSelecionada(e.target.value)}
-                  className="w-full bg-white border border-gray-300 text-gray-900 font-medium p-2.5 sm:p-3 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all text-sm sm:text-base"
+                  className={`w-full border text-gray-900 font-medium p-2.5 sm:p-3 rounded-lg ${fazendaSelecionada ? "bg-gray-100 border-gray-400" : "bg-white border-gray-300"} focus:outline-none focus:border-emerald-500 transition-all text-sm sm:text-base`}
                 >
                   <option value="">Todas as Fazendas</option>
                   {LISTA_FAZENDAS.map((f) => (
@@ -153,7 +153,7 @@ export default function HomePage() {
                 <input
                   type="text"
                   placeholder="Buscar por Talhão, Lote ou CC..."
-                  className="w-full bg-white border border-gray-300 text-gray-900 font-medium p-2.5 sm:p-3 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder-gray-500 text-sm sm:text-base"
+                  className={`w-full border text-gray-900 font-medium p-2.5 sm:p-3 rounded-lg ${filtroTexto ? "bg-gray-100 border-gray-300" : "bg-white border-gray-400"} focus:outline-none focus:border-emerald-500 text-sm sm:text-base`}
                   value={filtroTexto}
                   onChange={(e) => setFiltroTexto(e.target.value)}
                 />
@@ -177,7 +177,7 @@ export default function HomePage() {
                       type="date"
                       value={dataInicio}
                       onChange={(e) => setDataInicio(e.target.value)}
-                      className="w-full bg-white border border-gray-300 text-gray-900 font-medium p-2 sm:p-2.5 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm sm:text-base"
+                      className={`w-full border text-gray-900 font-medium p-2 sm:p-2.5 rounded-lg ${dataInicio ? "bg-gray-100 border-gray300" : "bg-white border-gray-400"}focus:ring-2 focus:ring-emerald-500 outline-none text-sm sm:text-base`}
                     />
                   </div>
                   <div className="w-full">
@@ -188,7 +188,7 @@ export default function HomePage() {
                       type="date"
                       value={dataFim}
                       onChange={(e) => setDataFim(e.target.value)}
-                      className="w-full bg-white border border-gray-300 text-gray-900 font-medium p-2 sm:p-2.5 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm sm:text-base"
+                      className={`w-full border text-gray-900 font-medium p-2 sm:p-2.5 rounded-lg ${dataFim ? "bg-gray-100 border-gray-300" : "bg-white border-gray-400"}focus:ring-2 focus:ring-emerald-500 outline-none text-sm sm:text-base`}
                     />
                   </div>
                 </div>
@@ -198,10 +198,10 @@ export default function HomePage() {
         </div>
 
         {locaisFiltrados.length === 0 ? (
-          <div className="text-center py-12 sm:py-16 bg-linear-to-b from-gray-50 to-white rounded-xl sm:rounded-2xl border-2 border-dashed border-gray-300">
+          <div className="text-center py-12 sm:py-16 bg-gray-100 rounded-xl sm:rounded-2xl border-2 border-dashed border-gray-300">
             <div className="max-w-md mx-auto px-4">
-              <div className="bg-gray-100 w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <MapPin className="text-gray-400 sm:w-7 sm:h-7" size={24} />
+              <div className="bg-gray-300 w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <MapPin className="text-red-500 sm:w-7 sm:h-7" size={24} />
               </div>
               <h3 className="text-gray-900 font-semibold text-lg sm:text-xl mb-2">
                 Nenhum local encontrado
