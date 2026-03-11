@@ -1,9 +1,21 @@
 'use client';
 
+import { useMemo, useCallback } from 'react';
 import { locaPlanta } from '@/src/data/dados';
-import { AlertTriangle, Calendar, CheckCircle, FileDown, Hash, MapPin } from 'lucide-react';
+import { 
+  AlertTriangle, Calendar, CheckCircle, FileDown, 
+  Hash, MapPin, Sprout, User 
+} from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { id } from 'date-fns/locale';
+
+// --- Interfaces ---
+interface Relatorio {
+  porcentagem: number;
+  doencaOuPraga: string;
+  [key: string]: any;
+}
 
 interface Sessao {
   id: string;
@@ -12,7 +24,7 @@ interface Sessao {
   centroCusto: string;
   nomeAvaliador?: string;
   criadoEm: string;
-  relatorios: any[];
+  relatorios: Relatorio[];
 }
 
 interface CriticalAlertsProps {
@@ -21,188 +33,205 @@ interface CriticalAlertsProps {
   dataFim?: string;
 }
 
+interface AlertaProcessado extends Relatorio {
+  nomeLocal: string;
+  lote: string;
+  planta: number;
+  centroCusto: string;
+  nomeAvaliador: string;
+  data: string;
+}
+
 export function CriticalAlerts({ dados, dataInicio, dataFim }: CriticalAlertsProps) {
   
-  const alertas = dados.flatMap(sessao => {
-    const localEncontrado = locaPlanta.find(l => l.centroCusto === sessao.centroCusto);
-    const nomeCompleto = localEncontrado ? localEncontrado.name : `Lote ${sessao.lote}`;
+  // 1. Otimização com useMemo para evitar recálculos desnecessários
+  const alertas = useMemo(() => {
+    return dados
+      .flatMap(sessao => {
+        const localEncontrado = locaPlanta.find(l => l.centroCusto === sessao.centroCusto);
+        const nomeCompleto = localEncontrado ? localEncontrado.name : `CC: ${sessao.centroCusto}`;
 
-    return (sessao.relatorios || [])
-      .filter((rel: any) => rel.porcentagem > 5)
-      .map((rel: any) => ({
-        ...rel,
-        nomeLocal: nomeCompleto,
-        lote: sessao.lote,
-        planta: sessao.planta,
-        centroCusto: sessao.centroCusto,
-        nomeAvaliador: sessao.nomeAvaliador || 'N/A',
-        data: sessao.criadoEm
-      }));
-  }).filter(alerta => {
-    const dataAlerta = alerta.data.split('T')[0];
-    if (dataInicio && dataAlerta < dataInicio) return false;
-    if (dataFim && dataAlerta > dataFim) return false;
-    return true;
-  }).sort((a, b) => b.porcentagem - a.porcentagem);
+        return (sessao.relatorios || [])
+          .filter((rel) => rel.porcentagem > 5)
+          .map((rel) => ({
+            ...rel,
+            nomeLocal: nomeCompleto,
+            lote: sessao.lote,
+            planta: sessao.planta,
+            centroCusto: sessao.centroCusto,
+            nomeAvaliador: sessao.nomeAvaliador || 'N/A',
+            data: sessao.criadoEm
+          }));
+      })
+      .filter((alerta) => {
+        const dataAlerta = alerta.data.split('T')[0];
+        if (dataInicio && dataAlerta < dataInicio) return false;
+        if (dataFim && dataAlerta > dataFim) return false;
+        return true;
+      })
+      .sort((a, b) => b.porcentagem - a.porcentagem); // Ordenar do maior para o menor risco
+  }, [dados, dataInicio, dataFim]);
 
-  const gerarPDF = () => {
+  // 2. Geração de PDF Otimizada
+  const gerarPDF = useCallback(() => {
     const doc = new jsPDF();
     
-    doc.setFontSize(16);
-    doc.text("Relatório de Alertas Críticos (>5%)", 14, 15);
+    // Título
+    doc.setTextColor(220, 38, 38); // Vermelho
+    doc.setFontSize(18);
+    doc.text("Relatório de Alertas Críticos", 14, 15);
     
+    // Subtítulo
+    doc.setTextColor(100);
     doc.setFontSize(10);
-    doc.text(`Período: ${dataInicio || 'Início'} até ${dataFim || 'Hoje'}`, 14, 22);
+    doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 22);
+    doc.text(`Critério: Infestação acima de 5%`, 14, 27);
 
     const dadosTabela = alertas.map(a => [
       new Date(a.data).toLocaleDateString('pt-BR'),
       a.nomeLocal,
-      a.planta.toString(),
+      `Lote ${a.lote} / P${a.planta}`,
       a.doencaOuPraga,
-      `${a.porcentagem.toFixed(1)}%`,
+      `${a.porcentagem.toFixed(2)}%`,
       a.nomeAvaliador
     ]);
 
     autoTable(doc, {
-      startY: 25,
-      head: [['Data', 'Local', 'Planta', 'Problema', 'Nível', 'Avaliador']],
+      startY: 35,
+      head: [['Data', 'Local', 'Ref.', 'Problema', 'Nível', 'Avaliador']],
       body: dadosTabela,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [220, 38, 38] } 
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [254, 242, 242] }, // Vermelho bem claro alternado
     });
 
     doc.save(`alertas_criticos_${new Date().toISOString().split('T')[0]}.pdf`);
-  };
+  }, [alertas]);
 
-  if (alertas.length === 0) return null;
+  if (dados.length === 0) return null;
 
- return (
-    <div className="bg-linear-to-r from-red-50 to-red-100/30 border border-red-200 rounded-xl p-4 sm:p-6 mb-6 sm:mb-8 shadow-sm">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="bg-red-100 p-1.5 sm:p-2 rounded-lg">
-            <AlertTriangle className="text-red-600" size={18}  />
+  return (
+    <section className="bg-linear-to-r from-red-50 to-white border border-red-100 rounded-2xl p-5 sm:p-6 mb-8 shadow-sm relative overflow-hidden">
+      {/* Barra lateral decorativa */}
+      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-red-500"></div>
+
+      {/* Cabeçalho do Componente */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 relative z-10">
+        <div className="flex items-center gap-3">
+          <div className="bg-red-100 p-2.5 rounded-xl shadow-inner">
+            <AlertTriangle className="text-red-600" size={24} />
           </div>
           <div>
-            <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">
-              Alertas Críticos ({'>'}5%)
+            <h2 className="text-xl font-bold text-gray-900 leading-tight">
+              Alertas Críticos
             </h2>
-            <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
-              Monitoramento com alta incidência de ocorrências
+            <p className="text-sm text-gray-600">
+              Registros acima do limite de tolerância (5%)
             </p>
           </div>
         </div>
-        <button 
-          onClick={gerarPDF}
-          className="w-full sm:w-auto bg-linear-to-r from-red-600 to-red-700 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 text-sm font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-sm hover:shadow-md"
-        >
-          <FileDown size={14} className="sm:w-4 sm:h-4" /> 
-          <span>Baixar Relatório</span>
-        </button>
+        
+        {alertas.length > 0 && (
+          <button 
+            onClick={gerarPDF}
+            className="w-full sm:w-auto bg-white border border-red-200 text-red-700 hover:bg-red-50 px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all shadow-sm active:scale-95"
+          >
+            <FileDown size={18} /> 
+            <span>Exportar PDF</span>
+          </button>
+        )}
       </div>
       
+      {/* Conteúdo */}
       {alertas.length === 0 ? (
-        <div className="bg-white rounded-lg border border-dashed border-gray-300 p-4 sm:p-6 text-center">
-          <div className="bg-green-50 w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center mx-auto mb-2 sm:mb-3">
-            <CheckCircle className="text-green-600" size={20}  />
+        <div className="bg-white/80 rounded-xl border border-dashed border-green-200 p-8 text-center backdrop-blur-sm">
+          <div className="bg-green-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
+            <CheckCircle className="text-green-600" size={28} />
           </div>
-          <p className="text-gray-700 font-medium text-sm sm:text-base">
-            Nenhum alerta crítico detectado
-          </p>
-          <p className="text-gray-500 text-xs sm:text-sm mt-1">
-            Todas as áreas estão dentro dos parâmetros normais
+          <h3 className="text-green-800 font-bold text-lg">Tudo sob controle</h3>
+          <p className="text-green-700/80 text-sm mt-1">
+            Nenhuma infestação crítica detectada no período selecionado.
           </p>
         </div>
       ) : (
-        <>
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs sm:text-sm text-gray-600">
-              {alertas.length} {alertas.length === 1 ? 'alerta crítico' : 'alertas críticos'} identificados
-            </p>
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                <span className="text-xs text-gray-600">Alto Risco</span>
-              </div>
-            </div>
+        <div className="relative">
+          {/* Contador de Risco */}
+          <div className="mb-4 flex items-center gap-2">
+            <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              {alertas.length}
+            </span>
+            <span className="text-sm font-medium text-red-900">
+              Ocorrências de alto risco encontradas
+            </span>
           </div>
 
-          <div className="relative">
-            <div className="overflow-x-auto pb-3 -mx-2 px-2">
-              <div className="flex gap-3 sm:gap-4 min-w-max">
-                {alertas.map((alerta, idx) => (
-                  <div 
-                    key={idx} 
-                    className="min-w-64 sm:min-w-72 bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:border-red-300 hover:shadow-md transition-all duration-300 group"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="bg-red-100 px-2 py-0.5 rounded-full">
-                            <span className="text-xs font-semibold text-red-700 uppercase tracking-wide truncate">
-                              {alerta.doencaOuPraga} 
-                            </span>
-                          </div>
-                          
-                        </div>
-                        
-                        <div className="text-2xl sm:text-3xl font-bold text-red-600 mb-2">
-                          {alerta.porcentagem.toFixed(2)}%
+          {/* Lista Horizontal (Scrollável) */}
+          <div className="overflow-x-auto pb-4 -mx-2 px-2 scrollbar-hide">
+            <div className="flex gap-4 min-w-max">
+              {alertas.map((alerta, idx) => (
+                <div 
+                  key={`${id}-${idx}`} 
+                  className="min-w-70 sm:min-w-75 bg-white rounded-xl border border-red-100 p-0 shadow-sm hover:shadow-md hover:border-red-300 transition-all duration-300 flex flex-col overflow-hidden group"
+                >
+                  {/* Topo do Card: Porcentagem e Doença */}
+                  <div className="p-4 bg-linear-to-br from-red-500 to-red-600 text-white">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="inline-block bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded mb-2 backdrop-blur-md">
+                          {alerta.doencaOuPraga}
+                        </span>
+                        <div className="text-3xl font-extrabold tracking-tight">
+                          {alerta.porcentagem.toFixed(1)}<span className="text-lg opacity-80">%</span>
                         </div>
                       </div>
-                      
-                     
-                    </div>
-                    
-                    <div className="space-y-2 pt-3 border-t border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <div className="bg-gray-50 p-1.5 rounded">
-                          <MapPin className="text-gray-600" size={14} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-900 truncate">
-                            {alerta.nomeLocal}
-                          </p>
-                          <p className="text-xs text-gray-600 truncate">
-                            CC: {alerta.centroCusto || "N/A"}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className="bg-gray-50 p-1.5 rounded">
-                          <Hash className="text-gray-600" size={14} />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-xs font-medium text-gray-900">
-                            Lote: <span className="font-semibold">{alerta.lote || "N/A"}</span>
-                          </p>
-                          <p className="text-xs text-gray-600">
-                            Planta: <span className="font-semibold">{alerta.planta}</span>
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className="bg-gray-50 p-1.5 rounded">
-                          <Calendar className="text-gray-600" size={14} />
-                        </div>
-                        <div className="text-xs font-medium text-gray-700">
-                          {new Date(alerta.data).toLocaleDateString('pt-BR')}
-                        </div>
+                      <div className="bg-white/20 p-1.5 rounded-lg">
+                        <Sprout size={20} className="text-white" />
                       </div>
                     </div>
-                    
-                    
                   </div>
-                ))}
-              </div>
+
+                  {/* Corpo do Card: Detalhes */}
+                  <div className="p-4 space-y-3 flex-1 bg-white">
+                    
+                    {/* Localização */}
+                    <div className="flex items-start gap-3">
+                      <MapPin className="text-gray-400 mt-0.5 shrink-0" size={16} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-gray-800 truncate" title={alerta.nomeLocal}>
+                          {alerta.nomeLocal}
+                        </p>
+                        <p className="text-xs text-gray-500">CC: {alerta.centroCusto}</p>
+                      </div>
+                    </div>
+
+                    {/* Identificação Planta/Lote */}
+                    <div className="flex items-center gap-3">
+                      <Hash className="text-gray-400 shrink-0" size={16} />
+                      <div className="text-xs text-gray-700">
+                        Lote <span className="font-semibold text-gray-900">{alerta.lote}</span> • Planta <span className="font-semibold text-gray-900">{alerta.planta}</span>
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-gray-100 w-full my-2"></div>
+
+                    {/* Rodapé do Card: Data e Avaliador */}
+                    <div className="flex justify-between items-center text-xs text-gray-500">
+                      <div className="flex items-center gap-1.5" title={alerta.nomeAvaliador}>
+                        <User size={14} />
+                        <span className="truncate max-w-20">{alerta.nomeAvaliador.split(' ')[0]}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Calendar size={14} />
+                        <span>{new Date(alerta.data).toLocaleDateString('pt-BR')}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 bg-linear-to-l from-white to-transparent w-8 h-full pointer-events-none hidden sm:block"></div>
           </div>
-        </>
+        </div>
       )}
-    </div>
+    </section>
   );
 }

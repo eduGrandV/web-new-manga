@@ -4,27 +4,115 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSessoes } from '../../../../services/api';
 import { locaPlanta } from '../../../../data/dados';
-import { ArrowLeft, User, MapPin, CheckCircle, AlertTriangle, Sprout } from 'lucide-react';
+import { 
+  ArrowLeft, MapPin, Sprout, ChevronDown, ChevronUp, 
+  AlertOctagon, CheckCircle2, Leaf, Microscope, 
+  ThermometerSun, Droplets, Wind, ScanLine
+} from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import dynamic from 'next/dynamic';
-
-interface Sessao {
-  id: string;
-  lote: string;
-  planta: number;
-  centroCusto: string;
-  nomeAvaliador: string;
-  criadoEm: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  avaliacoes?: any[];
-  relatorios?: any[];
-}
 
 const MapaCalor = dynamic(() => import('@/src/app/components/MapaCalor'), { 
   ssr: false,
-  loading: () => <p className="text-black font-bold">Carregando mapa de satélite...</p>
+  loading: () => <div className="h-full w-full bg-slate-900/50 animate-pulse flex items-center justify-center text-emerald-400 font-mono">INICIALIZANDO SATÉLITE...</div>
 });
+
+// --- COMPONENTE: BARRA DE SEVERIDADE (Visual Tech) ---
+const SeverityBar = ({ percent }: { percent: number }) => {
+  const isCritical = percent > 5;
+  return (
+    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mt-2">
+      <div 
+        className={`h-full transition-all duration-500 ${isCritical ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-emerald-500'}`}
+        style={{ width: `${Math.min(percent, 100)}%` }}
+      />
+    </div>
+  );
+};
+
+// --- COMPONENTE: CARD EXPANSÍVEL (Estilo HUD) ---
+const PragaCardTech = ({ relatorio, notasDetalhadas }: { relatorio: any, notasDetalhadas: any[] }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const isCritico = relatorio.porcentagem > 5;
+
+  return (
+    <div className={`group relative overflow-hidden rounded-xl border transition-all duration-300 ${
+      isOpen ? 'bg-white shadow-xl ring-1 ring-emerald-500/20' : 'bg-white/60 hover:bg-white shadow-sm border-gray-200'
+    }`}>
+      
+      {/* LINHA DE STATUS LATERAL */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${isCritico ? 'bg-red-500' : 'bg-emerald-500'}`} />
+
+      {/* CABEÇALHO CLICÁVEL */}
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full p-4 pl-6 flex items-center justify-between"
+      >
+        <div className="flex items-center gap-4">
+          <div className={`p-2.5 rounded-lg ${isCritico ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+            {isCritico ? <AlertOctagon size={22} /> : <Microscope size={22} />}
+          </div>
+          <div className="text-left">
+            <h4 className="font-bold text-slate-800 text-lg leading-tight">{relatorio.doencaOuPraga}</h4>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded-full mt-1 inline-block">
+              {relatorio.orgao}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-6">
+          <div className="w-24 text-right">
+            <div className="flex items-end justify-end gap-1">
+              <span className={`text-2xl font-black ${isCritico ? 'text-red-600' : 'text-slate-700'}`}>
+                {relatorio.porcentagem.toFixed(1)}
+              </span>
+              <span className="text-xs font-bold text-slate-400 mb-1">%</span>
+            </div>
+            <SeverityBar percent={relatorio.porcentagem} />
+          </div>
+          <div className={`p-1 rounded-full transition-transform duration-300 ${isOpen ? 'rotate-180 bg-slate-100' : ''}`}>
+            <ChevronDown size={20} className="text-slate-400" />
+          </div>
+        </div>
+      </button>
+
+      {/* ÁREA DE DETALHES (ANIMAÇÃO) */}
+      {isOpen && (
+        <div className="bg-slate-50/50 border-t border-slate-100 p-4 pl-6 animate-in slide-in-from-top-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {notasDetalhadas.length > 0 ? notasDetalhadas.map((nota, i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-100 shadow-sm">
+                
+                <div className="flex flex-col">
+                   <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full ${nota.identificadorDeLocal === 'Bordadura' ? 'bg-blue-500' : 'bg-purple-500'}`} />
+                      <span className="text-xs font-bold text-slate-600 uppercase">{nota.identificadorDeLocal || 'Geral'}</span>
+                   </div>
+                   
+                   <div className="flex gap-2 font-mono text-[10px]">
+                      {nota.quadrante && <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 border border-slate-200">Q:{nota.quadrante}</span>}
+                      {nota.ramo && <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 border border-slate-200">R:{nota.ramo}</span>}
+                   </div>
+                </div>
+
+                <div className="flex flex-col items-center">
+                   <span className="text-[9px] font-bold text-slate-400 uppercase">Nota</span>
+                   <span className={`text-lg font-black ${nota.nota >= 3 ? 'text-red-500' : 'text-emerald-500'}`}>
+                     {nota.nota}
+                   </span>
+                </div>
+
+              </div>
+            )) : (
+              <p className="text-sm text-slate-400 italic col-span-2">Sem notas individuais registradas.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function DetailPage() {
   const params = useParams();
@@ -33,221 +121,204 @@ export default function DetailPage() {
   const centroCusto = decodeURIComponent(params.centroCusto as string);
   const dataFiltro = params.data as string; 
 
-  const [sessoes, setSessoes] = useState<Sessao[]>([]);
+  const [sessoes, setSessoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const infoLocal = locaPlanta.find((l: any) => l.centroCusto === centroCusto);
-  const nomeLocal = infoLocal ? infoLocal.name : centroCusto;
+  // --- LÓGICA DE CÁLCULO MANTIDA ---
+  const calcularPorcentagemManual = (sessao: any, nomeItem: string) => {
+    const notasDoItem = sessao.avaliacoes?.filter((av: any) => (av.doencaOuPraga || av.doenca) === nomeItem) || [];
+    if (notasDoItem.length === 0) return 0;
 
-  useEffect(() => {
-    carregarDados();
-  }, []);
+    const nomeCheck = nomeItem.toUpperCase();
+    const isPraga = ["COCHONILHA", "MOSCA", "ACÁRO", "TRIPS", "PULGÃO"].some(p => nomeCheck.includes(p));
+
+    if (isPraga) {
+      const bNotas = notasDoItem.filter((r: any) => r.identificadorDeLocal === "Bordadura");
+      const aNotas = notasDoItem.filter((r: any) => r.identificadorDeLocal === "Área interna da parcela");
+      const totalB = bNotas.reduce((acc: number, curr: any) => acc + (Number(curr.nota) || 1), 0);
+      const totalA = aNotas.reduce((acc: number, curr: any) => acc + (Number(curr.nota) || 1), 0);
+      const mult = notasDoItem.some((r: any) => !!r.ramo) ? 8 : 4;
+      const pctB = (totalB * 100) / (4 * mult);
+      const pctA = (totalA * 100) / (6 * mult);
+      return (pctB + pctA) / 2;
+    } else {
+      const total = notasDoItem.reduce((acc: number, curr: any) => acc + (Number(curr.nota) || 1), 0);
+      const divisor = notasDoItem[0]?.orgao?.toUpperCase().includes("FOLHA") ? 8 : 4;
+      return (total * 100) / divisor;
+    }
+  };
 
   const carregarDados = async () => {
     try {
       const todos = await getSessoes();
-      
-      const filtrados = todos.filter((d: Sessao) => {
-        const dia = d.criadoEm.split('T')[0];
+      const filtrados = todos.filter((d: any) => {
+        const dia = d.criadoEm ? d.criadoEm.substring(0, 10) : '';
         return d.centroCusto === centroCusto && dia === dataFiltro;
       });
 
-      const dadosTratados = filtrados.map((sessao: Sessao) => {
+      const dadosTratados = filtrados.map((sessao: any) => {
         const gpsRef = sessao.avaliacoes?.find((av: any) => av.latitude && av.longitude);
+        const relatoriosTratados = sessao.relatorios?.map((rel: any) => {
+          let pct = Number(rel.porcentagem);
+          if (!pct || pct === 0) { pct = calcularPorcentagemManual(sessao, rel.doencaOuPraga); }
+          return { ...rel, porcentagem: pct };
+        });
+
         return {
           ...sessao,
+          relatorios: relatoriosTratados,
           latitude: gpsRef?.latitude || null,
           longitude: gpsRef?.longitude || null
         };
       });
 
       setSessoes(dadosTratados);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error(error); } finally { setLoading(false); }
   };
 
- return (
-    <main className="min-h-screen bg-linear-to-b from-gray-50 to-white p-3 sm:p-4 md:p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Cabeçalho */}
-        <div className="flex items-start sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-gray-200">
-          <button 
-            onClick={() => router.back()} 
-            className="text-gray-700 hover:bg-gray-100 p-1.5 sm:p-2 rounded-full transition-colors duration-200 shrink-0"
-          >
-            <ArrowLeft size={20} className="sm:w-6 sm:h-6" />
+  useEffect(() => { carregarDados(); }, []);
+
+  const infoLocal = locaPlanta.find((l: any) => l.centroCusto === centroCusto);
+  const nomeLocal = infoLocal ? infoLocal.name : centroCusto;
+
+  return (
+    <main className="min-h-screen bg-[#F3F4F6] text-slate-800">
+      
+      {/* HEADER FLUTUANTE */}
+      <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-200 px-4 py-3 md:px-8 flex justify-between items-center shadow-sm">
+        <div className="flex items-center gap-4">
+          <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500">
+            <ArrowLeft size={20} />
           </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
-              {nomeLocal}
-            </h1>
-            <p className="text-gray-600 text-sm sm:text-base mt-0.5 sm:mt-1 truncate">
-              Registros de {dataFiltro ? format(parseISO(dataFiltro), 'dd/MM/yyyy') : 'Data inválida'}
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 leading-none">{nomeLocal}</h1>
+            <p className="text-xs text-slate-500 font-medium mt-1 flex items-center gap-2">
+              <ScanLine size={12} /> LOTE MONITORADO
             </p>
           </div>
         </div>
+        <div className="hidden md:flex items-center gap-3 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Data:</span>
+           <span className="text-sm font-bold text-slate-800">
+             {dataFiltro ? format(parseISO(dataFiltro), "dd MMM yyyy", { locale: ptBR }).toUpperCase() : '--'}
+           </span>
+        </div>
+      </div>
 
+      <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
+        
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-12 sm:py-16">
-            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-emerald-600 mb-3 sm:mb-4"></div>
-            <p className="text-gray-700 font-medium text-sm sm:text-base">Carregando dados...</p>
-          </div>
+           <div className="h-96 flex flex-col items-center justify-center gap-4 text-slate-400">
+             <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"/>
+             <span className="font-mono text-xs uppercase tracking-widest">Carregando dados...</span>
+           </div>
         ) : (
-          <div className="space-y-6 sm:space-y-8">
-            {/* Mapa de Severidade */}
-            <section className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 p-4 sm:p-5 md:p-6 shadow-sm">
-              <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-5">
-                <div className="bg-emerald-50 p-1.5 sm:p-2 rounded-lg">
-                  <MapPin size={18} className="sm:w-5 sm:h-5 text-emerald-700" />
-                </div>
-                <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">
-                  Mapa de Severidade
-                </h2>
-              </div>
-              <div className="rounded-lg sm:rounded-xl overflow-hidden border border-gray-300">
-                <div className="min-h-75 sm:min-h-87.5 md:min-h-100 flex items-center justify-center">
-                  <MapaCalor dados={sessoes} />
-                </div>
-              </div>
-              <p className="text-gray-500 text-xs sm:text-sm mt-2 sm:mt-3">
-                Visualização da intensidade de ocorrências por área
-              </p>
-            </section>
-
-            {/* Detalhamento por Planta */}
-            <section className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 p-4 sm:p-5 md:p-6 shadow-sm">
-              <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-                <div className="bg-blue-50 p-1.5 sm:p-2 rounded-lg">
-                  <Sprout size={18} className="sm:w-5 sm:h-5 text-blue-700" />
-                </div>
-                <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900">
-                  Detalhamento por Planta
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:gap-5">
-                {sessoes.map((sessao) => (
-                  <div 
-                    key={sessao.id} 
-                    className="border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-5 bg-white hover:border-emerald-300 hover:shadow-md transition-all duration-300"
-                  >
-                    {/* Cabeçalho da Planta */}
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 mb-3 sm:mb-4 border-b border-gray-100">
-                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                        <span className="bg-linear-to-r from-emerald-600 to-emerald-700 text-white text-xs font-semibold px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full">
-                          Planta {sessao.planta}
-                        </span>
-                        <span className="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full">
-                          Lote {sessao.lote}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-700 bg-gray-50 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg">
-                        <User size={12} className="sm:w-3.5 sm:h-3.5 text-gray-500" />
-                        <span className="font-medium truncate">{sessao.nomeAvaliador}</span>
-                      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+            
+            {/* COLUNA 1: MAPA RADAR (Fixo na esquerda em Desktop) */}
+            <div className="lg:col-span-4 lg:sticky lg:top-24 h-fit space-y-4">
+              <div className="bg-white rounded-2xl p-1 shadow-lg shadow-slate-200/50 border border-slate-100 relative overflow-hidden group">
+                 <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold text-slate-600 shadow-sm flex items-center gap-2">
+                    <MapPin size={12} className="text-emerald-500" /> SATÉLITE
+                 </div>
+                 <div className="h-100 w-full rounded-xl overflow-hidden bg-slate-900">
+                    <MapaCalor dados={sessoes} />
+                 </div>
+                 
+                 {/* Mini Stats Overlay */}
+                 <div className="absolute bottom-4 left-4 right-4 grid grid-cols-2 gap-2">
+                    <div className="bg-white/90 backdrop-blur p-3 rounded-xl border border-slate-100 shadow-sm">
+                       <p className="text-[10px] font-bold text-slate-400 uppercase">Plantas</p>
+                       <p className="text-xl font-black text-slate-800">{sessoes.length}</p>
                     </div>
+                    <div className="bg-white/90 backdrop-blur p-3 rounded-xl border border-slate-100 shadow-sm">
+                       <p className="text-[10px] font-bold text-slate-400 uppercase">Alertas</p>
+                       <p className="text-xl font-black text-red-500">
+                         {sessoes.filter(s => s.relatorios?.some((r:any) => r.porcentagem > 5)).length}
+                       </p>
+                    </div>
+                 </div>
+              </div>
 
-                    {/* Avaliações */}
-                    {sessao.avaliacoes && sessao.avaliacoes.length > 0 ? (
-                      <div className="space-y-3 sm:space-y-4">
-                        {Object.values(
-                          sessao.avaliacoes.reduce((acc: any, av: any) => {
-                            if (!acc[av.doencaOuPraga]) acc[av.doencaOuPraga] = [];
-                            acc[av.doencaOuPraga].push(av);
-                            return acc;
-                          }, {})
-                        ).map((grupo: any, idx) => {
-                          const nomeItem = grupo[0].doencaOuPraga;
-                          const relatorio = sessao.relatorios?.find((r: any) => r.doencaOuPraga === nomeItem);
-                          const porcentagem = relatorio ? relatorio.porcentagem : 0;
-                          const ehCritico = porcentagem > 5;
+             
+            </div>
 
-                          return (
-                            <div 
-                              key={idx} 
-                              className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border ${
-                                ehCritico 
-                                  ? 'bg-linear-to-r from-red-50 to-red-100/50 border-red-200' 
-                                  : 'bg-linear-to-r from-gray-50 to-gray-100/50 border-gray-200'
-                              }`}
-                            >
-                              <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-                                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                                  {ehCritico ? (
-                                    <div className="bg-red-100 p-1 sm:p-1.5 rounded shrink-0">
-                                      <AlertTriangle size={14} className="sm:w-4 sm:h-4 text-red-600" />
-                                    </div>
-                                  ) : (
-                                    <div className="bg-green-100 p-1 sm:p-1.5 rounded shrink-0">
-                                      <CheckCircle size={14} className="sm:w-4 sm:h-4 text-green-600" />
-                                    </div>
-                                  )}
-                                  <strong className={`text-sm font-semibold truncate ${
-                                    ehCritico ? 'text-red-800' : 'text-gray-800'
-                                  }`}>
-                                    {nomeItem}
-                                  </strong>
-                                </div>
-                                <span className={`text-base sm:text-lg font-bold whitespace-nowrap ${
-                                  ehCritico ? 'text-red-700' : 'text-emerald-700'
-                                }`}>
-                                  {porcentagem.toFixed(2)}%
-                                </span>
-                              </div>
+            {/* COLUNA 2: STREAM DE DADOS (Lista de Plantas) */}
+            <div className="lg:col-span-8 space-y-6">
+              {sessoes.map((sessao, index) => (
+                <div key={sessao.id} className="relative pl-0 md:pl-8 transition-all duration-300">
+                  
+                  {/* Linha do Tempo (Decorativa) */}
+                  <div className="hidden md:block absolute left-3 top-0 bottom-0 w-px bg-slate-200"></div>
+                  <div className="hidden md:flex absolute left-0 top-6 w-7 h-7 bg-white border-4 border-emerald-100 rounded-full items-center justify-center z-10">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                  </div>
 
-                              <div className="space-y-1.5 sm:space-y-2 mt-2 sm:mt-3">
-                                {grupo.map((av: any, i: number) => (
-                                  <div 
-                                    key={i} 
-                                    className="flex flex-col xs:flex-row xs:items-center justify-between gap-1 sm:gap-2 py-1.5 sm:py-2 px-2.5 sm:px-3 bg-white rounded-lg border border-gray-100"
-                                  >
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">
-                                        {av.orgao}
-                                      </span>
-                                      {av.identificadorDeLocal && (
-                                        <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
-                                          {av.identificadorDeLocal}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                      <span className="text-xs text-gray-600">Nota:</span>
-                                      <span className={`font-bold text-sm sm:text-base ${
-                                        av.nota >= 3 ? 'text-red-600' : 'text-emerald-600'
-                                      }`}>
-                                        {av.nota}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center py-6 sm:py-8">
-                        <div className="text-center">
-                          <div className="bg-emerald-50 w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center mx-auto mb-2 sm:mb-3">
-                            <CheckCircle size={20} className="sm:w-6 sm:h-6 text-emerald-600" />
+                  {/* Card Principal da Planta */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-1">
+                    
+                    {/* Header da Planta */}
+                    <div className="bg-slate-50 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-emerald-500 rounded-lg shadow-lg shadow-emerald-200 flex items-center justify-center text-white font-black text-xl">
+                          {sessao.planta}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-slate-800 text-lg">Planta {sessao.planta}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white border border-slate-200 text-slate-500 uppercase">
+                              LOTE {sessao.lote}
+                            </span>
+                            <span className="text-xs text-slate-400">•</span>
+                            <span className="text-xs font-medium text-slate-500">{sessao.nomeAvaliador}</span>
                           </div>
-                          <p className="text-emerald-700 font-medium text-sm sm:text-base">
-                            Planta em condições saudáveis
-                          </p>
-                          <p className="text-gray-500 text-xs sm:text-sm mt-0.5 sm:mt-1">
-                            Sem registros de ocorrências
-                          </p>
                         </div>
                       </div>
-                    )}
+                      
+                      {/* Status Geral da Planta */}
+                      {(!sessao.relatorios || sessao.relatorios.length === 0) ? (
+                         <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100/50 text-emerald-700 rounded-lg text-sm font-bold">
+                            <CheckCircle2 size={16} /> Saudável
+                         </div>
+                      ) : (
+                         <div className="flex -space-x-2">
+                            {/* Avatares das pragas encontradas (Decorativo) */}
+                            {sessao.relatorios.slice(0, 3).map((r:any, i:number) => (
+                              <div key={i} className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${r.porcentagem > 5 ? 'bg-red-500' : 'bg-emerald-400'}`}>
+                                {r.doencaOuPraga.charAt(0)}
+                              </div>
+                            ))}
+                            {sessao.relatorios.length > 3 && (
+                              <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                                +{sessao.relatorios.length - 3}
+                              </div>
+                            )}
+                         </div>
+                      )}
+                    </div>
+
+                    {/* Lista de Pragas (Acordeão) */}
+                    <div className="p-2 space-y-2 mt-2">
+                       {sessao.relatorios?.map((rel: any, idx: number) => {
+                          const notasDestaPraga = sessao.avaliacoes?.filter((av: any) => 
+                            (av.doencaOuPraga || av.doenca) === rel.doencaOuPraga
+                          ) || [];
+                          return <PragaCardTech key={idx} relatorio={rel} notasDetalhadas={notasDestaPraga} />;
+                       })}
+                       
+                       {(!sessao.relatorios || sessao.relatorios.length === 0) && (
+                         <div className="py-8 flex flex-col items-center justify-center text-slate-300">
+                            <Sprout size={32} className="mb-2 opacity-50" />
+                            <p className="text-sm font-medium">Nenhuma praga detectada nesta planta.</p>
+                         </div>
+                       )}
+                    </div>
+
                   </div>
-                ))}
-              </div>
-            </section>
+                </div>
+              ))}
+            </div>
+
           </div>
         )}
       </div>

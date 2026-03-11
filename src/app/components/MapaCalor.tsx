@@ -31,7 +31,8 @@ export default function MapaCalor({ dados }: { dados: any[] }) {
     <div className="h-100 w-full rounded-lg overflow-hidden border-2 border-black shadow-lg relative z-0">
       <MapContainer 
         center={[latMedia, lngMedia]} 
-        zoom={18} 
+        zoom={17}
+        maxZoom={17}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={false}
       >
